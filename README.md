@@ -9,7 +9,7 @@
 
 | Layer | Tech |
 |---|---|
-| AI Model | Google Gemini 1.5 Flash |
+| AI Model | Google Gemini 2.5 Flash |
 | Tool Protocol | MCP (3 tools) |
 | API | FastAPI |
 | Flight Data | Amadeus API (free test) |

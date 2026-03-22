@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SkyFind — AI Flight Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Variables ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:    #0a0a0f;
+  --paper:  #f5f3ee;
+  --sky:    #0057ff;
+  --sky2:   #003ecc;
+  --accent: #ff5c35;
+  --muted:  #8a8880;
+  --card:   #ffffff;
+  --border: rgba(10,10,15,0.1);
+  --r:      14px;
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Animated Background ─────────────────────────────────────────────────── */
+.bg-mesh {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(0,87,255,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 110%, rgba(255,92,53,0.06) 0%, transparent 60%),
+    var(--paper);
+}
+
+.bg-grid {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(10,10,15,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10,10,15,0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────────────────── */
+nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(245,243,238,0.85);
+}
+
+.nav-logo {
+  font-family: var(--font-display);
+  font-weight: 800; font-size: 22px; letter-spacing: -0.5px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.nav-logo .dot { color: var(--sky); }
+
+.nav-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--ink); color: var(--paper);
+  padding: 8px 16px; border-radius: 100px;
+  font-size: 13px; font-weight: 500;
+}
+
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #22c55e;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 80px 40px 60px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,87,255,0.08);
+  border: 1px solid rgba(0,87,255,0.2);
+  color: var(--sky);
+  font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 6px 14px; border-radius: 100px;
+  margin-bottom: 24px;
+  animation: fade-up 0.6s ease both;
+}
+
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(42px, 6vw, 72px);
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -2px;
+  animation: fade-up 0.6s 0.1s ease both;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--sky);
+  position: relative;
+}
+
+.hero h1 em::after {
+  content: '';
+  position: absolute; left: 0; bottom: -4px;
+  width: 100%; height: 3px;
+  background: var(--sky);
+  border-radius: 2px;
+  transform-origin: left;
+  animation: underline-in 0.6s 0.8s ease both;
+  transform: scaleX(0);
+}
+
+@keyframes underline-in { to { transform: scaleX(1); } }
+
+.hero p {
+  margin-top: 20px;
+  font-size: 18px; color: var(--muted); max-width: 480px; line-height: 1.6;
+  animation: fade-up 0.6s 0.2s ease both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Search Panel ────────────────────────────────────────────────────────── */
+.search-panel {
+  max-width: 1100px; margin: 0 auto 60px;
+  padding: 0 40px;
+  animation: fade-up 0.6s 0.3s ease both;
+}
+
+.search-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.06);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: 4px;
+  background: var(--paper);
+  border-radius: 10px; padding: 4px;
+  width: fit-content;
+  margin-bottom: 28px;
+}
+
+.tab {
+  font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  padding: 8px 18px; border-radius: 7px; border: none; cursor: pointer;
+  background: transparent; color: var(--muted);
+  transition: all 0.2s;
+}
+
+.tab.active {
+  background: var(--ink); color: var(--paper);
+}
+
+/* ── Form Grid ───────────────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 160px 160px 140px;
+  gap: 12px;
+  align-items: end;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+.field label {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.field input, .field select {
+  font-family: var(--font-body);
+  font-size: 15px; font-weight: 500;
+  background: var(--paper);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 16px;
+  outline: none; color: var(--ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.field input:focus, .field select:focus {
+  border-color: var(--sky);
+  box-shadow: 0 0 0 3px rgba(0,87,255,0.1);
+}
+
+.swap-btn {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: var(--sky); font-size: 20px;
+  padding: 12px 4px;
+  transition: transform 0.3s;
+}
+
+.swap-btn:hover { transform: rotate(180deg); }
+
+.route-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px; align-items: end;
+  grid-column: 1 / 3;
+}
+
+.search-btn {
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 700;
+  background: var(--sky);
+  color: white; border: none; border-radius: var(--r);
+  padding: 14px 24px; cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap;
+}
+
+.search-btn:hover { background: var(--sky2); box-shadow: 0 6px 20px rgba(0,87,255,0.3); }
+.search-btn:active { transform: scale(0.97); }
+.search-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ── AI Chat Strip ───────────────────────────────────────────────────────── */
+.ai-strip {
+  margin-top: 20px;
+  display: flex; gap: 10px; align-items: center;
+}
+
+.ai-input-wrap {
+  flex: 1; position: relative;
+}
+
+.ai-icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 16px; pointer-events: none;
+}
+
+.ai-input {
+  font-family: var(--font-body);
+  width: 100%; padding: 13px 16px 13px 42px;
+  background: var(--paper);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  font-size: 14px; outline: none; color: var(--ink);
+  transition: border-color 0.2s;
+}
+
+.ai-input:focus { border-color: var(--sky); box-shadow: 0 0 0 3px rgba(0,87,255,0.1); }
+
+.ai-btn {
+  font-family: var(--font-body); font-size: 14px; font-weight: 500;
+  padding: 13px 22px; border-radius: var(--r); border: none; cursor: pointer;
+  background: var(--ink); color: var(--paper);
+  display: flex; align-items: center; gap: 8px;
+  transition: opacity 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.ai-btn:hover { opacity: 0.85; }
+.ai-btn:active { transform: scale(0.97); }
+.ai-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Tools Bar ───────────────────────────────────────────────────────────── */
+.tools-bar {
+  max-width: 1100px; margin: 0 auto 32px;
+  padding: 0 40px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+  animation: fade-up 0.6s 0.4s ease both;
+}
+
+.tool-chip {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 7px 14px; border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--card); color: var(--muted);
+  cursor: default;
+  transition: all 0.2s;
+}
+
+.tool-chip.active {
+  border-color: var(--sky);
+  color: var(--sky);
+  background: rgba(0,87,255,0.06);
+}
+
+.tool-chip.done {
+  border-color: #22c55e;
+  color: #16a34a;
+  background: rgba(34,197,94,0.06);
+}
+
+.tool-chip .chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Loading State ───────────────────────────────────────────────────────── */
+.loader-section {
+  max-width: 1100px; margin: 0 auto 40px;
+  padding: 0 40px;
+  display: none;
+}
+
+.loader-section.visible { display: block; }
+
+.loader-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+}
+
+.plane-animation {
+  font-size: 40px;
+  display: inline-block;
+  animation: fly 2s ease-in-out infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes fly {
+  0%,100% { transform: translateX(-10px) rotate(-5deg); }
+  50%      { transform: translateX(10px) rotate(5deg); }
+}
+
+.loader-text {
+  font-family: var(--font-display);
+  font-size: 18px; font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.loader-sub { font-size: 14px; color: var(--muted); }
+
+.steps-row {
+  display: flex; gap: 8px; justify-content: center;
+  flex-wrap: wrap; margin-top: 20px;
+}
+
+.step-pill {
+  font-size: 12px; padding: 5px 12px; border-radius: 100px;
+  border: 1px solid var(--border); color: var(--muted);
+  transition: all 0.4s;
+}
+
+.step-pill.running {
+  border-color: var(--sky); color: var(--sky);
+  background: rgba(0,87,255,0.07);
+  animation: step-pulse 1s ease-in-out infinite;
+}
+
+.step-pill.done {
+  border-color: #22c55e; color: #16a34a;
+  background: rgba(34,197,94,0.07);
+  animation: none;
+}
+
+@keyframes step-pulse {
+  0%,100% { opacity: 1; } 50% { opacity: 0.6; }
+}
+
+/* ── Results ─────────────────────────────────────────────────────────────── */
+.results-section {
+  max-width: 1100px; margin: 0 auto 80px;
+  padding: 0 40px;
+  display: none;
+}
+
+.results-section.visible { display: block; }
+
+.results-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.results-title {
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 800;
+}
+
+.results-meta { font-size: 13px; color: var(--muted); }
+
+/* Sort bar */
+.sort-bar {
+  display: flex; gap: 6px; margin-bottom: 20px; align-items: center;
+}
+
+.sort-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-right: 4px; }
+
+.sort-btn {
+  font-family: var(--font-body); font-size: 12px; font-weight: 500;
+  padding: 6px 14px; border-radius: 100px;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--muted); cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sort-btn.active {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+
+/* Flight Cards */
+.flights-list { display: flex; flex-direction: column; gap: 12px; }
+
+.flight-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 24px; align-items: center;
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+  animation: slide-in 0.4s ease both;
+  cursor: default;
+}
+
+.flight-card:hover {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  border-color: rgba(0,87,255,0.2);
+  transform: translateY(-2px);
+}
+
+.flight-card.cheapest {
+  border-color: var(--sky);
+  background: linear-gradient(135deg, rgba(0,87,255,0.02) 0%, white 100%);
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.airline-badge {
+  width: 52px; height: 52px; border-radius: 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 800;
+  color: var(--sky);
+  flex-shrink: 0;
+}
+
+.flight-route {
+  display: flex; align-items: center; gap: 16px;
+}
+
+.flight-time {
+  text-align: center;
+}
+
+.flight-time .time {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+}
+
+.flight-time .city {
+  font-size: 12px; color: var(--muted); margin-top: 2px;
+}
+
+.route-line {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+
+.route-line .duration {
+  font-size: 11px; color: var(--muted); font-weight: 500;
+}
+
+.line-track {
+  width: 100%; display: flex; align-items: center; gap: 4px;
+}
+
+.line-track .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.line-track .bar { flex: 1; height: 1px; background: var(--border); }
+
+.stops-badge {
+  font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 100px;
+}
+
+.stops-badge.nonstop { background: rgba(34,197,94,0.1); color: #16a34a; }
+.stops-badge.one     { background: rgba(234,179,8,0.1);  color: #a16207; }
+.stops-badge.multi   { background: rgba(239,68,68,0.1);  color: #b91c1c; }
+
+.flight-meta { text-align: right; }
+
+.source-tag {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  font-weight: 600; padding: 3px 8px; border-radius: 100px;
+  margin-bottom: 8px; display: inline-block;
+}
+
+.source-tag.amadeus    { background: rgba(0,87,255,0.1);  color: var(--sky); }
+.source-tag.skyscanner { background: rgba(255,92,53,0.1); color: var(--accent); }
+
+.price-usd {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 800; color: var(--ink);
+  letter-spacing: -1px;
+}
+
+.price-inr { font-size: 13px; color: var(--muted); margin-top: 1px; }
+
+.book-btn {
+  font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  padding: 8px 18px; border-radius: 8px;
+  background: var(--sky); color: white; border: none; cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 8px; display: block; text-align: center;
+}
+
+.book-btn:hover { background: var(--sky2); }
+
+.cheapest-badge {
+  display: none;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--sky); color: white;
+  padding: 3px 10px; border-radius: 100px;
+  margin-bottom: 6px;
+}
+
+.flight-card.cheapest .cheapest-badge { display: inline-block; }
+
+/* ── AI Answer Panel ─────────────────────────────────────────────────────── */
+.ai-panel {
+  background: var(--ink); color: var(--paper);
+  border-radius: var(--r); padding: 28px 32px;
+  margin-bottom: 28px;
+  display: none;
+}
+
+.ai-panel.visible { display: block; animation: fade-up 0.4s ease; }
+
+.ai-panel-header {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-display);
+  font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; margin-bottom: 16px;
+  color: rgba(245,243,238,0.6);
+}
+
+.gemini-icon { font-size: 18px; }
+
+.ai-answer {
+  font-size: 15px; line-height: 1.75;
+  white-space: pre-wrap;
+  color: var(--paper);
+}
+
+/* ── Tools Called ────────────────────────────────────────────────────────── */
+.tools-called {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.tool-used {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 5px 12px; border-radius: 100px;
+  background: rgba(0,87,255,0.08); color: var(--sky);
+  border: 1px solid rgba(0,87,255,0.2);
+}
+
+/* ── Compare Table ───────────────────────────────────────────────────────── */
+.compare-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r); padding: 24px;
+  margin-bottom: 20px;
+  display: none;
+}
+
+.compare-panel.visible { display: block; animation: fade-up 0.4s ease; }
+
+.compare-title {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.compare-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+
+.compare-box {
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  transition: border-color 0.2s;
+}
+
+.compare-box.winner { border-color: var(--sky); background: rgba(0,87,255,0.03); }
+
+.compare-box-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+
+.compare-price {
+  font-family: var(--font-display);
+  font-size: 32px; font-weight: 800; letter-spacing: -1px;
+}
+
+.compare-detail { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+.savings-bar {
+  margin-top: 12px; padding: 12px 16px;
+  background: rgba(34,197,94,0.08); border-radius: 8px;
+  font-size: 13px; color: #16a34a; font-weight: 500;
+}
+
+/* ── Quick Stats ─────────────────────────────────────────────────────────── */
+.quick-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r); padding: 20px;
+  animation: fade-up 0.4s ease both;
+}
+
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 28px; font-weight: 800; letter-spacing: -1px;
+}
+
+.stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ── Error ───────────────────────────────────────────────────────────────── */
+.error-box {
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: var(--r); padding: 20px 24px;
+  color: #b91c1c; font-size: 14px; margin-bottom: 20px;
+  display: none;
+}
+
+.error-box.visible { display: block; animation: fade-up 0.3s ease; }
+
+/* ── Airport Quick Search ────────────────────────────────────────────────── */
+.quick-links {
+  margin-top: 16px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+.quick-link {
+  font-size: 12px; padding: 6px 14px; border-radius: 100px;
+  background: var(--paper); border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 5px;
+}
+
+.quick-link:hover { border-color: var(--sky); color: var(--sky); background: rgba(0,87,255,0.05); }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer {
+  text-align: center; padding: 40px;
+  font-size: 12px; color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  nav { padding: 16px 20px; }
+  .hero, .search-panel, .results-section, .tools-bar { padding-left: 20px; padding-right: 20px; }
+  .hero { padding-top: 48px; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .route-row { grid-column: 1 / -1; }
+  .flight-card { grid-template-columns: auto 1fr; grid-template-rows: auto auto; }
+  .flight-meta { grid-column: 2; }
+  .quick-stats { grid-template-columns: 1fr 1fr; }
+  .compare-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-mesh"></div>
+<div class="bg-grid"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">Sky<span class="dot">Find</span></div>
+  <div class="nav-pill">
+    <div class="status-dot"></div>
+    Gemini 2.5 Flash · 7 Tools Active
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-eyebrow">✦ AI-Powered Flight Search</div>
+  <h1>Find the best flight.<br><em>Instantly.</em></h1>
+  <p>Gemini searches Amadeus, Skyscanner & the web simultaneously to find you the lowest price.</p>
+
+  <div class="quick-links" id="quickLinks">
+    <span class="quick-label" style="font-size:12px;color:var(--muted);align-self:center;">Popular:</span>
+  </div>
+</section>
+
+<!-- Search Panel -->
+<section class="search-panel">
+  <div class="search-card">
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="setTab(this,'form')">✈ Search</button>
+      <button class="tab" onclick="setTab(this,'ai')">✦ Ask AI</button>
+      <button class="tab" onclick="setTab(this,'compare')">⇄ Compare</button>
+    </div>
+
+    <!-- Form Tab -->
+    <div id="tab-form">
+      <div class="form-grid">
+        <div class="route-row">
+          <div class="field">
+            <label>From</label>
+            <input id="origin" type="text" placeholder="DEL — Delhi" maxlength="3"
+                   style="text-transform:uppercase;font-size:18px;letter-spacing:1px"
+                   oninput="this.value=this.value.toUpperCase()"/>
+          </div>
+          <button class="swap-btn" onclick="swapRoutes()" title="Swap">⇄</button>
+          <div class="field">
+            <label>To</label>
+            <input id="destination" type="text" placeholder="LHR — London" maxlength="3"
+                   style="text-transform:uppercase;font-size:18px;letter-spacing:1px"
+                   oninput="this.value=this.value.toUpperCase()"/>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Departure</label>
+          <input id="date" type="date"/>
+        </div>
+
+        <div class="field">
+          <label>Passengers</label>
+          <select id="adults">
+            <option value="1">1 Adult</option>
+            <option value="2">2 Adults</option>
+            <option value="3">3 Adults</option>
+            <option value="4">4 Adults</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Class</label>
+          <select id="cabin">
+            <option value="ECONOMY">Economy</option>
+            <option value="PREMIUM_ECONOMY">Prem. Economy</option>
+            <option value="BUSINESS">Business</option>
+            <option value="FIRST">First</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="search-btn" onclick="searchFlights()" id="searchBtn">
+            <span id="searchBtnText">Search</span>
+            <span id="searchBtnIcon">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Tab -->
+    <div id="tab-ai" style="display:none">
+      <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">
+        Ask anything. Gemini uses all 7 tools to answer your flight question.
+      </p>
+      <div class="ai-strip">
+        <div class="ai-input-wrap">
+          <span class="ai-icon">✦</span>
+          <input class="ai-input" id="aiQuery"
+                 placeholder="Cheapest flights from Mumbai to Singapore next month for 2 people…"
+                 onkeydown="if(event.key==='Enter') askAI()"/>
+        </div>
+        <button class="ai-btn" onclick="askAI()" id="aiBtn">
+          <span id="aiBtnText">Ask Gemini</span>
+          <span>→</span>
+        </button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted);align-self:center;">Try:</span>
+        <button class="quick-link" onclick="setAI(this)">Best time to book DEL→LHR</button>
+        <button class="quick-link" onclick="setAI(this)">Cheapest DEL to DXB this week</button>
+        <button class="quick-link" onclick="setAI(this)">BOM to SIN flights under $400</button>
+        <button class="quick-link" onclick="setAI(this)">Compare DEL to NYC options</button>
+      </div>
+    </div>
+
+    <!-- Compare Tab -->
+    <div id="tab-compare" style="display:none">
+      <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">
+        Compare live prices from <strong>Amadeus</strong> + <strong>Skyscanner</strong> side-by-side.
+      </p>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 160px 140px">
+        <div class="field">
+          <label>From</label>
+          <input id="cmpOrigin" type="text" placeholder="DEL" maxlength="3"
+                 style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+        </div>
+        <div class="field">
+          <label>To</label>
+          <input id="cmpDest" type="text" placeholder="LHR" maxlength="3"
+                 style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input id="cmpDate" type="date"/>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="search-btn" onclick="compareFlights()" id="cmpBtn">Compare →</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Tools Bar -->
+<div class="tools-bar" id="toolsBar">
+  <div class="tool-chip" id="chip-amadeus">⬡ Amadeus</div>
+  <div class="tool-chip" id="chip-skyscanner">◈ Skyscanner</div>
+  <div class="tool-chip" id="chip-duckduckgo">⊙ DuckDuckGo</div>
+  <div class="tool-chip" id="chip-google_search">⊕ Google</div>
+  <div class="tool-chip" id="chip-exchange">✦ Exchange Rate</div>
+  <div class="tool-chip" id="chip-airport">◎ Airport Info</div>
+  <div class="tool-chip" id="chip-compare">⇄ Price Compare</div>
+</div>
+
+<!-- Loader -->
+<section class="loader-section" id="loaderSection">
+  <div class="loader-card">
+    <div class="plane-animation">✈</div>
+    <div class="loader-text" id="loaderText">Searching across all platforms…</div>
+    <div class="loader-sub" id="loaderSub">Gemini is calling tools in parallel</div>
+    <div class="steps-row" id="stepsRow"></div>
+  </div>
+</section>
+
+<!-- Results -->
+<section class="results-section" id="resultsSection">
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- AI Answer -->
+  <div class="ai-panel" id="aiPanel">
+    <div class="ai-panel-header">
+      <span class="gemini-icon">✦</span> Gemini AI Answer
+    </div>
+    <div class="ai-answer" id="aiAnswer"></div>
+  </div>
+
+  <!-- Tools used -->
+  <div class="tools-called" id="toolsUsed"></div>
+
+  <!-- Compare boxes -->
+  <div class="compare-panel" id="comparePanel">
+    <div class="compare-title">Price Comparison</div>
+    <div class="compare-grid" id="compareGrid"></div>
+    <div class="savings-bar" id="savingsBar" style="display:none"></div>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="quick-stats" id="quickStats" style="display:none">
+    <div class="stat-card" style="animation-delay:0s">
+      <div class="stat-label">Lowest Price</div>
+      <div class="stat-value" id="statLow">—</div>
+      <div class="stat-sub" id="statLowSub">—</div>
+    </div>
+    <div class="stat-card" style="animation-delay:0.1s">
+      <div class="stat-label">Flights Found</div>
+      <div class="stat-value" id="statCount">—</div>
+      <div class="stat-sub" id="statCountSub">across all sources</div>
+    </div>
+    <div class="stat-card" style="animation-delay:0.2s">
+      <div class="stat-label">Best Value</div>
+      <div class="stat-value" id="statBest">—</div>
+      <div class="stat-sub" id="statBestSub">—</div>
+    </div>
+  </div>
+
+  <!-- Results header -->
+  <div class="results-header" id="resultsHeader" style="display:none">
+    <div class="results-title" id="resultsTitle">Flights Found</div>
+    <div class="results-meta" id="resultsMeta"></div>
+  </div>
+
+  <!-- Sort -->
+  <div class="sort-bar" id="sortBar" style="display:none">
+    <span class="sort-label">Sort:</span>
+    <button class="sort-btn active" onclick="sortFlights('price',this)">Cheapest</button>
+    <button class="sort-btn" onclick="sortFlights('stops',this)">Fewer Stops</button>
+    <button class="sort-btn" onclick="sortFlights('duration',this)">Fastest</button>
+    <button class="sort-btn" onclick="sortFlights('score',this)">Best Value</button>
+  </div>
+
+  <!-- Flight Cards -->
+  <div class="flights-list" id="flightsList"></div>
+</section>
+
+<footer>
+  SkyFind · Powered by Gemini 1.5 Flash · 7 MCP Tools · FastAPI Backend
+</footer>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+const API = 'http://127.0.0.1:8000';
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentFlights = [];
+let exchangeRate   = 83.5;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Set default date to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 7);
+  const iso = tomorrow.toISOString().split('T')[0];
+  document.getElementById('date').value    = iso;
+  document.getElementById('cmpDate').value = iso;
+
+  // Populate quick links
+  const routes = [
+    {o:'DEL',d:'LHR',label:'Delhi → London'},
+    {o:'BOM',d:'DXB',label:'Mumbai → Dubai'},
+    {o:'DEL',d:'SIN',label:'Delhi → Singapore'},
+    {o:'BOM',d:'JFK',label:'Mumbai → New York'},
+    {o:'DEL',d:'BKK',label:'Delhi → Bangkok'},
+  ];
+  const ql = document.getElementById('quickLinks');
+  routes.forEach(r => {
+    const btn = document.createElement('button');
+    btn.className = 'quick-link';
+    btn.textContent = r.label;
+    btn.onclick = () => {
+      document.getElementById('origin').value      = r.o;
+      document.getElementById('destination').value = r.d;
+      setTab(document.querySelector('.tab'), 'form');
+    };
+    ql.appendChild(btn);
+  });
+
+  // Load live exchange rate silently
+  fetchExchangeRate();
+});
+
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch(`${API}/exchange?from_currency=USD&to_currency=INR`);
+    const d   = await res.json();
+    if (d.rate) exchangeRate = d.rate;
+  } catch {}
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function setTab(btn, name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  ['form','ai','compare'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === name ? 'block' : 'none';
+  });
+}
+
+// ── Swap ─────────────────────────────────────────────────────────────────────
+function swapRoutes() {
+  const o = document.getElementById('origin');
+  const d = document.getElementById('destination');
+  [o.value, d.value] = [d.value, o.value];
+}
+
+// ── Tool Chips ────────────────────────────────────────────────────────────────
+const TOOL_CHIP_MAP = {
+  search_flights:    'chip-amadeus',
+  skyscanner_search: 'chip-skyscanner',
+  duckduckgo_search: 'chip-duckduckgo',
+  google_search:     'chip-google_search',
+  get_exchange_rate: 'chip-exchange',
+  get_airport_info:  'chip-airport',
+  compare_prices:    'chip-compare',
+};
+
+function resetChips() {
+  document.querySelectorAll('.tool-chip').forEach(c => {
+    c.classList.remove('active','done');
+  });
+}
+
+function activateChip(toolName) {
+  const id = TOOL_CHIP_MAP[toolName];
+  if (id) document.getElementById(id)?.classList.add('active');
+}
+
+function completeChip(toolName) {
+  const id = TOOL_CHIP_MAP[toolName];
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('active'); el.classList.add('done'); }
+}
+
+// ── Loading Steps ─────────────────────────────────────────────────────────────
+const SEARCH_STEPS = [
+  { id:'s1', label:'Connecting to Amadeus',     tool:'search_flights'    },
+  { id:'s2', label:'Fetching Skyscanner',       tool:'skyscanner_search' },
+  { id:'s3', label:'DuckDuckGo search',         tool:'duckduckgo_search' },
+  { id:'s4', label:'Currency conversion',       tool:'get_exchange_rate' },
+  { id:'s5', label:'Ranking results',           tool:null                },
+];
+
+function showLoader(steps) {
+  const loader = document.getElementById('loaderSection');
+  const row    = document.getElementById('stepsRow');
+  loader.classList.add('visible');
+  row.innerHTML = '';
+  steps.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'step-pill';
+    el.id = s.id;
+    el.textContent = s.label;
+    row.appendChild(el);
+  });
+}
+
+function hideLoader() {
+  document.getElementById('loaderSection').classList.remove('visible');
+}
+
+function animateSteps(steps, delay = 800) {
+  steps.forEach((s, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(s.id);
+      if (el) el.classList.add('running');
+      if (s.tool) activateChip(s.tool);
+    }, i * delay);
+
+    setTimeout(() => {
+      const el = document.getElementById(s.id);
+      if (el) { el.classList.remove('running'); el.classList.add('done'); }
+      if (s.tool) completeChip(s.tool);
+    }, i * delay + delay - 100);
+  });
+}
+
+// ── Format Helpers ───────────────────────────────────────────────────────────
+function fmtINR(usd) {
+  if (!usd) return '—';
+  const inr = Math.round(usd * exchangeRate);
+  return '₹' + inr.toLocaleString('en-IN');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:false});
+  } catch { return iso.substring(11,16) || '—'; }
+}
+
+function fmtDuration(iso) {
+  if (!iso) return '—';
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!m) return iso;
+  return (m[1] ? m[1]+'h ' : '') + (m[2] ? m[2]+'m' : '');
+}
+
+function stopsClass(n) {
+  if (n === 0) return 'nonstop';
+  if (n === 1) return 'one';
+  return 'multi';
+}
+
+function stopsLabel(n) {
+  if (n === 0) return 'Non-stop';
+  if (n === 1) return '1 Stop';
+  return `${n} Stops`;
+}
+
+// ── Render Tools Used ─────────────────────────────────────────────────────────
+function renderToolsUsed(tools) {
+  const el = document.getElementById('toolsUsed');
+  el.innerHTML = '';
+  const icons = {
+    search_flights:'⬡',skyscanner_search:'◈',duckduckgo_search:'⊙',
+    google_search:'⊕',get_exchange_rate:'✦',get_airport_info:'◎',compare_prices:'⇄'
+  };
+  tools.forEach(t => {
+    el.innerHTML += `<div class="tool-used">${icons[t.tool]||'○'} ${t.tool.replace(/_/g,' ')}</div>`;
+  });
+}
+
+// ── Render Flights ────────────────────────────────────────────────────────────
+function renderFlights(flights) {
+  const list = document.getElementById('flightsList');
+  list.innerHTML = '';
+  if (!flights.length) {
+    list.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:var(--r)">
+      No flights found. Try different dates or routes.</div>`;
+    return;
+  }
+
+  flights.forEach((f, i) => {
+    const isChp = i === 0;
+    const card  = document.createElement('div');
+    card.className = 'flight-card' + (isChp ? ' cheapest' : '');
+    card.style.animationDelay = (i * 0.06) + 's';
+
+    const src    = (f.source || 'amadeus').toLowerCase();
+    const srcLbl = src === 'skyscanner' ? 'Skyscanner' : 'Amadeus';
+
+    card.innerHTML = `
+      <div class="airline-badge">${(f.airline||'?').substring(0,2)}</div>
+      <div>
+        <div style="margin-bottom:10px">
+          <span class="cheapest-badge">CHEAPEST</span>
+        </div>
+        <div class="flight-route">
+          <div class="flight-time">
+            <div class="time">${fmtTime(f.departure_time)}</div>
+            <div class="city">${f.origin||''}</div>
+          </div>
+          <div class="route-line">
+            <div class="duration">${fmtDuration(f.duration)}</div>
+            <div class="line-track">
+              <div class="dot"></div>
+              <div class="bar"></div>
+              <div class="dot"></div>
+            </div>
+            <span class="stops-badge ${stopsClass(f.stops||0)}">${stopsLabel(f.stops||0)}</span>
+          </div>
+          <div class="flight-time">
+            <div class="time">${fmtTime(f.arrival_time)}</div>
+            <div class="city">${f.destination||''}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+          ${f.airline||''} ${f.flight_number||''} · ${f.cabin||'Economy'}
+        </div>
+      </div>
+      <div></div>
+      <div class="flight-meta">
+        <div><span class="source-tag ${src}">${srcLbl}</span></div>
+        <div class="cheapest-badge" style="display:${isChp?'inline-block':'none'}">CHEAPEST</div>
+        <div class="price-usd">$${f.price_usd?.toFixed(0)||'—'}</div>
+        <div class="price-inr">${fmtINR(f.price_usd)} per person</div>
+        ${f.deep_link
+          ? `<a href="${f.deep_link}" target="_blank" class="book-btn">Book →</a>`
+          : `<button class="book-btn">Book →</button>`}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ── Sort ─────────────────────────────────────────────────────────────────────
+function sortFlights(by, btn) {
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sorted = [...currentFlights];
+  if (by === 'price')    sorted.sort((a,b) => (a.price_usd||9999) - (b.price_usd||9999));
+  if (by === 'stops')    sorted.sort((a,b) => (a.stops||0) - (b.stops||0));
+  if (by === 'duration') sorted.sort((a,b) => (a.duration||'').localeCompare(b.duration||''));
+  if (by === 'score')    sorted.sort((a,b) => (b.score||0) - (a.score||0));
+  renderFlights(sorted);
+}
+
+// ── Show Results Container ────────────────────────────────────────────────────
+function showResults() {
+  document.getElementById('resultsSection').classList.add('visible');
+}
+
+function hideResults() {
+  document.getElementById('resultsSection').classList.remove('visible');
+  document.getElementById('aiPanel').classList.remove('visible');
+  document.getElementById('comparePanel').classList.remove('visible');
+  document.getElementById('errorBox').classList.remove('visible');
+  document.getElementById('quickStats').style.display = 'none';
+  document.getElementById('sortBar').style.display = 'none';
+  document.getElementById('resultsHeader').style.display = 'none';
+  document.getElementById('toolsUsed').innerHTML = '';
+  document.getElementById('flightsList').innerHTML = '';
+}
+
+// ── Show Stats ────────────────────────────────────────────────────────────────
+function showStats(flights) {
+  if (!flights.length) return;
+  const cheapest = flights[0];
+  const nonstop  = flights.filter(f => f.stops === 0);
+  document.getElementById('statLow').textContent    = `$${cheapest.price_usd?.toFixed(0)||'—'}`;
+  document.getElementById('statLowSub').textContent = `${fmtINR(cheapest.price_usd)} · ${cheapest.airline||''}`;
+  document.getElementById('statCount').textContent  = flights.length;
+  document.getElementById('statBest').textContent   = nonstop.length > 0
+    ? `$${nonstop[0].price_usd?.toFixed(0)||'—'}` : 'None';
+  document.getElementById('statBestSub').textContent = nonstop.length > 0
+    ? `Non-stop · ${nonstop[0].airline||''}` : 'No non-stop found';
+  document.getElementById('quickStats').style.display = 'grid';
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+async function searchFlights() {
+  const origin  = document.getElementById('origin').value.trim().toUpperCase();
+  const dest    = document.getElementById('destination').value.trim().toUpperCase();
+  const date    = document.getElementById('date').value;
+  const adults  = document.getElementById('adults').value;
+
+  if (!origin || !dest || !date) {
+    alert('Please fill in origin, destination and date.');
+    return;
+  }
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  document.getElementById('searchBtnText').textContent = 'Searching…';
+
+  hideResults();
+  resetChips();
+  showLoader(SEARCH_STEPS);
+  animateSteps(SEARCH_STEPS, 700);
+
+  try {
+    const res = await fetch(
+      `${API}/compare?origin=${origin}&destination=${dest}&date=${date}&adults=${adults}`
+    );
+    const data = await res.json();
+
+    hideLoader();
+    showResults();
+
+    // Stats
+    const allF = (data.all_flights || []).filter(f => f.price_usd);
+    currentFlights = allF;
+    showStats(allF);
+
+    // Compare boxes
+    if (data.cheapest_amadeus || data.cheapest_skyscanner) {
+      const cPanel = document.getElementById('comparePanel');
+      const cGrid  = document.getElementById('compareGrid');
+      cPanel.classList.add('visible');
+
+      const ama = data.cheapest_amadeus;
+      const sky = data.cheapest_skyscanner;
+      const winner = (!ama || (sky && sky.price_usd < ama.price_usd)) ? 'sky' : 'ama';
+
+      cGrid.innerHTML = `
+        <div class="compare-box ${winner==='ama'?'winner':''}">
+          <div class="compare-box-label">⬡ Amadeus${winner==='ama'?' · ✓ Cheaper':''}</div>
+          <div class="compare-price">${ama ? '$'+ama.price_usd.toFixed(0) : '—'}</div>
+          <div class="compare-detail">${ama ? (ama.airline+' · '+stopsLabel(ama.stops||0)) : 'No results'}</div>
+        </div>
+        <div class="compare-box ${winner==='sky'?'winner':''}">
+          <div class="compare-box-label">◈ Skyscanner${winner==='sky'?' · ✓ Cheaper':''}</div>
+          <div class="compare-price">${sky ? '$'+sky.price_usd.toFixed(0) : '—'}</div>
+          <div class="compare-detail">${sky ? (sky.airline+' · '+stopsLabel(sky.stops||0)) : 'No results'}</div>
+        </div>
+      `;
+
+      if (data.price_difference_usd) {
+        const savBar = document.getElementById('savingsBar');
+        savBar.style.display = 'block';
+        savBar.textContent   = `💰 Price difference: $${data.price_difference_usd} (${fmtINR(data.price_difference_usd)}) — book from the cheaper source!`;
+      }
+    }
+
+    // Flight list
+    document.getElementById('resultsHeader').style.display = 'flex';
+    document.getElementById('resultsTitle').textContent = `${origin} → ${dest}`;
+    document.getElementById('resultsMeta').textContent =
+      `${allF.length} flights · ${date} · ${adults} adult(s)`;
+    document.getElementById('sortBar').style.display = 'flex';
+    renderFlights(allF);
+
+    // Mark all chips done
+    Object.keys(TOOL_CHIP_MAP).forEach(k => completeChip(k));
+
+  } catch(e) {
+    hideLoader();
+    showResults();
+    const eb = document.getElementById('errorBox');
+    eb.classList.add('visible');
+    eb.textContent = `Error: ${e.message}. Make sure the FastAPI server is running on ${API}`;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('searchBtnText').textContent = 'Search';
+  }
+}
+
+// ── AI CHAT ───────────────────────────────────────────────────────────────────
+async function askAI() {
+  const query = document.getElementById('aiQuery').value.trim();
+  if (!query) { alert('Please enter a question.'); return; }
+
+  const btn = document.getElementById('aiBtn');
+  btn.disabled = true;
+  document.getElementById('aiBtnText').textContent = 'Thinking…';
+
+  hideResults();
+  resetChips();
+
+  const AI_STEPS = [
+    {id:'a1', label:'Parsing query',           tool:null},
+    {id:'a2', label:'Searching Amadeus',       tool:'search_flights'},
+    {id:'a3', label:'Checking Skyscanner',     tool:'skyscanner_search'},
+    {id:'a4', label:'DuckDuckGo web search',   tool:'duckduckgo_search'},
+    {id:'a5', label:'Currency conversion',     tool:'get_exchange_rate'},
+    {id:'a6', label:'Gemini composing answer', tool:null},
+  ];
+
+  showLoader(AI_STEPS);
+  animateSteps(AI_STEPS, 600);
+  document.getElementById('loaderText').textContent = 'Gemini is researching your question…';
+
+  try {
+    const res  = await fetch(`${API}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query}),
+    });
+    const data = await res.json();
+
+    hideLoader();
+    showResults();
+
+    // AI Answer
+    const panel = document.getElementById('aiPanel');
+    panel.classList.add('visible');
+    document.getElementById('aiAnswer').textContent = data.answer || 'No answer returned.';
+
+    // Tools used
+    if (data.tools_called?.length) renderToolsUsed(data.tools_called);
+
+    // Flight cards
+    if (data.flights?.length) {
+      currentFlights = data.flights;
+      showStats(data.flights);
+      document.getElementById('sortBar').style.display = 'flex';
+      document.getElementById('resultsHeader').style.display = 'flex';
+      document.getElementById('resultsTitle').textContent = 'Flights Found';
+      document.getElementById('resultsMeta').textContent = `${data.flights.length} results`;
+      renderFlights(data.flights);
+    }
+
+    data.tools_called?.forEach(t => completeChip(t.tool)); 
+
+  } catch(e) {
+    hideLoader();
+    showResults();
+    const eb = document.getElementById('errorBox');
+    eb.classList.add('visible');
+    eb.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('aiBtnText').textContent = 'Ask Gemini';
+  }
+}
+
+// ── COMPARE ───────────────────────────────────────────────────────────────────
+async function compareFlights() {
+  const origin = document.getElementById('cmpOrigin').value.trim().toUpperCase();
+  const dest   = document.getElementById('cmpDest').value.trim().toUpperCase();
+  const date   = document.getElementById('cmpDate').value;
+  if (!origin || !dest || !date) { alert('Fill all fields.'); return; }
+
+  const btn = document.getElementById('cmpBtn');
+  btn.disabled = true;
+  btn.textContent = 'Comparing…';
+
+  hideResults();
+  resetChips();
+
+  const CMP_STEPS = [
+    {id:'c1', label:'Amadeus search',    tool:'search_flights'},
+    {id:'c2', label:'Skyscanner search', tool:'skyscanner_search'},
+    {id:'c3', label:'Merging results',   tool:'compare_prices'},
+    {id:'c4', label:'Ranking by price',  tool:null},
+  ];
+
+  showLoader(CMP_STEPS);
+  animateSteps(CMP_STEPS, 700);
+  document.getElementById('loaderText').textContent = 'Comparing prices across platforms…';
+
+  try {
+    const res  = await fetch(`${API}/compare?origin=${origin}&destination=${dest}&date=${date}`);
+    const data = await res.json();
+
+    hideLoader();
+    showResults();
+
+    const allF = (data.all_flights||[]).filter(f => f.price_usd);
+    currentFlights = allF;
+
+    // Compare panel
+    const cPanel = document.getElementById('comparePanel');
+    const cGrid  = document.getElementById('compareGrid');
+    cPanel.classList.add('visible');
+
+    const ama    = data.cheapest_amadeus;
+    const sky    = data.cheapest_skyscanner;
+    const winner = (!ama || (sky && sky.price_usd < ama.price_usd)) ? 'sky' : 'ama';
+
+    cGrid.innerHTML = `
+      <div class="compare-box ${winner==='ama'?'winner':''}">
+        <div class="compare-box-label">⬡ Amadeus${winner==='ama'?' · ✓ Cheaper':''}</div>
+        <div class="compare-price">${ama?'$'+ama.price_usd.toFixed(0):'—'}</div>
+        <div class="compare-detail">${ama?(ama.airline+' · '+stopsLabel(ama.stops||0)):'No data'}</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)">${ama?fmtINR(ama.price_usd):''}</div>
+      </div>
+      <div class="compare-box ${winner==='sky'?'winner':''}">
+        <div class="compare-box-label">◈ Skyscanner${winner==='sky'?' · ✓ Cheaper':''}</div>
+        <div class="compare-price">${sky?'$'+sky.price_usd.toFixed(0):'—'}</div>
+        <div class="compare-detail">${sky?(sky.airline+' · '+stopsLabel(sky.stops||0)):'No data'}</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)">${sky?fmtINR(sky.price_usd):''}</div>
+      </div>
+    `;
+
+    if (data.price_difference_usd) {
+      const sb = document.getElementById('savingsBar');
+      sb.style.display = 'block';
+      sb.textContent   = `💰 Save $${data.price_difference_usd} by booking from the cheaper platform!`;
+    }
+
+    showStats(allF);
+    document.getElementById('resultsHeader').style.display = 'flex';
+    document.getElementById('resultsTitle').textContent    = `${origin} → ${dest} Comparison`;
+    document.getElementById('resultsMeta').textContent     = `${data.total_results||0} total results`;
+    document.getElementById('sortBar').style.display       = 'flex';
+    renderFlights(allF);
+
+    activateChip('compare_prices'); completeChip('compare_prices');
+    activateChip('search_flights'); completeChip('search_flights');
+    activateChip('skyscanner_search'); completeChip('skyscanner_search');
+
+  } catch(e) {
+    hideLoader();
+    showResults();
+    const eb = document.getElementById('errorBox');
+    eb.classList.add('visible');
+    eb.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Compare →';
+  }
+}
+
+// ── Quick AI Prompts ──────────────────────────────────────────────────────────
+function setAI(btn) {
+  document.getElementById('aiQuery').value = btn.textContent;
+  document.getElementById('aiQuery').focus();
+}
+
+// ── Enter key on search ───────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('tab-form').style.display !== 'none') {
+    searchFlights();
+  }
+});
+</script>
+</body>
+</html>

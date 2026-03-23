@@ -1,6 +1,6 @@
 # ✈️ Flight Price Comparison — Simple Edition
 
-**Gemini 1.5 Flash + MCP Tools + FastAPI**  
+**Gemini 2.5 Flash + MCP Tools + FastAPI**  
 4 files · zero database · runs in 2 minutes
 
 ---
@@ -104,7 +104,7 @@ User query
     ↓
 FastAPI /chat
     ↓
-Gemini 1.5 Flash (agent.py)
+Gemini 2.5 Flash (agent.py)
     ↓  decides which tools to call
 MCP Tools (mcp_tools.py)
     ├── search_flights  → Amadeus API
